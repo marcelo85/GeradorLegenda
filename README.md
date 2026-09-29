@@ -1,74 +1,84 @@
-# Gerador de Legenda
+# Gerador de Legendas
 
-Projeto para gerar arquivos `.srt` a partir de vídeos, usando o modelo Whisper para transcrição.
+Aplicativo para transcrever vídeos com o Whisper e gerar um arquivo `.srt` no idioma original do áudio.
 
-## Visão geral
+## Requisitos
 
-O sistema permite:
-- selecionar um vídeo
-- escolher o idioma falado no arquivo
-- transcrever o áudio com o Whisper
-- gerar um arquivo de legenda no idioma original
+- Windows
+- Python 3.10 ou superior instalado
+- Git instalado, caso vá clonar o projeto pelo terminal
+- Conexão com a internet para instalar as bibliotecas e baixar o modelo Whisper escolhido
 
-## Estrutura do projeto
+Não é necessário instalar o FFmpeg manualmente. O aplicativo prepara uma cópia local automaticamente usando `imageio-ffmpeg`.
 
-```text
-GeradorLegenda/
-├── main.py
-├── docs/
-│   └── README.md
-├── src/
-│   ├── app.py
-│   ├── ffmpeg_setup.py
-│   ├── language_picker.py
-│   ├── model_picker.py
-│   ├── progress_bar.py
-│   ├── text_utils.py
-│   └── transcription.py
-├── tests/
-│   ├── test_translator.py
-│   ├── test_utils.py
-│   └── test_whisper.py
-└── ffmpeg.exe
+## Baixar o projeto
+
+Se ainda não tiver o projeto no computador, abra o PowerShell na pasta onde deseja salvá-lo e execute:
+
+```powershell
+git clone https://github.com/marcelo85/GeradorLegenda.git
+cd GeradorLegenda
 ```
 
-## Modelos do Whisper
+Se já baixou o projeto como arquivo ZIP, extraia-o e abra o PowerShell na pasta extraída.
 
-- **tiny**: mais rápido, menor precisão
-- **base**: equilíbrio bom para uso geral
-- **small**: melhor custo-benefício
-- **medium**: mais preciso, porém mais lento
-- **large**: maior precisão, exige mais recursos
+## Instalar
 
-## Como usar
+Na pasta do projeto, crie e ative um ambiente virtual Python:
 
-1. Abra o projeto em um ambiente Python.
-2. Execute:
-
-```bash
-python main.py
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-3. Selecione o vídeo.
-4. Escolha o idioma falado no vídeo.
-5. Escolha o modelo Whisper na janela seguinte.
-6. Aguarde o processamento.
-7. Ao terminar, escolha se deseja apagar o modelo Whisper do cache.
-8. O arquivo `.srt` será gerado na mesma pasta do vídeo.
+Se o PowerShell impedir a ativação do ambiente, permita scripts somente nesta janela e tente novamente:
 
-## Dependências
-
-```bash
-pip install openai-whisper
-pip install imageio-ffmpeg
-pip install deep-translator
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
 ```
 
-## Observações
+Com o ambiente virtual ativo, instale as dependências:
 
-- O projeto também prepara automaticamente uma cópia local do `ffmpeg.exe` para funcionar dentro da pasta do aplicativo.
-- O modelo Whisper é selecionado pela interface. O FP16 é ativado automaticamente quando o modelo está usando uma GPU CUDA; em CPU, é desativado. Ao fim da transcrição, o aplicativo pergunta se o arquivo do modelo deve ser removido do cache; se removido, será baixado novamente no próximo uso.
-- O Whisper não oferece uma opção para desativar censura; palavras omitidas podem depender do áudio ou do reconhecimento do modelo.
-- A tradução está temporariamente desativada; a lógica foi mantida no código para reativação posterior.
-- Durante a transcrição, o terminal mostra a barra real de frames e as frases reconhecidas.
-- A lógica foi separada por responsabilidade para facilitar manutenção e expansão futura.
+```powershell
+python -m pip install --upgrade pip
+python -m pip install openai-whisper imageio-ffmpeg deep-translator
+```
+
+`deep-translator` permanece nas dependências porque o código de tradução foi mantido, mas a tradução está temporariamente desativada.
+
+## Iniciar o aplicativo
+
+Com o ambiente virtual ativado e ainda na pasta do projeto, execute:
+
+```powershell
+python run.py
+```
+
+Na janela do aplicativo:
+
+1. Selecione o arquivo de vídeo.
+2. Escolha o idioma falado no vídeo.
+3. Escolha o modelo Whisper.
+4. Aguarde a transcrição. Na primeira utilização do modelo escolhido, o Whisper baixa os arquivos do modelo, o que pode levar algum tempo.
+5. Ao fim, escolha se deseja apagar o modelo do cache.
+
+O arquivo `.srt` é salvo na mesma pasta do vídeo. Se apagar o modelo do cache, ele será baixado novamente na próxima utilização.
+
+## Modelos Whisper
+
+- **tiny**: mais rápido e leve, com menor precisão.
+- **base**: rápido e leve, adequado para áudio claro.
+- **small**: equilíbrio entre velocidade e precisão.
+- **medium**: mais preciso, mas requer mais tempo e memória.
+- **large**: maior precisão e maior consumo de recursos.
+
+O modelo é baixado automaticamente na primeira vez que for usado. Modelos maiores exigem mais memória e podem levar mais tempo para transcrever, especialmente em CPU. O FP16 é ativado automaticamente quando o Whisper utiliza uma GPU CUDA; em CPU, é desativado.
+
+## Tradução
+
+A geração da legenda traduzida está temporariamente desativada. No momento, o aplicativo gera somente a legenda no idioma original. A lógica de tradução foi mantida no código para reativação posterior.
+
+## FFmpeg
+
+O aplicativo usa `imageio-ffmpeg` para preparar automaticamente o executável do FFmpeg na pasta do projeto. Não baixe nem instale o FFmpeg separadamente.
