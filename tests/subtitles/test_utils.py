@@ -1,6 +1,6 @@
 import pytest
 
-from src.text_utils import corrigir_erros_texto, segundos_para_tempo
+from src.subtitles.text_utils import corrigir_erros_texto, segundos_para_tempo
 
 
 @pytest.mark.parametrize(

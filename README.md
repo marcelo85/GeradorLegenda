@@ -4,11 +4,13 @@ Aplicativo para transcrever o áudio de vídeos com o Whisper e gerar um arquivo
 
 ## O que o aplicativo faz
 
-- Permite selecionar um vídeo nos formatos MP4, MKV, AVI ou MOV.
+- Permite selecionar vários vídeos nos formatos MP4, MKV, AVI ou MOV de uma só vez.
 - Permite escolher o idioma do áudio: inglês, português, espanhol, francês, alemão ou outro idioma pelo código (por exemplo, `it`, `ru` ou `zh`).
-- Transcreve o áudio usando um modelo Whisper selecionado na interface.
+- Para cada vídeo, permite escolher individualmente o idioma e o modelo Whisper.
+- Transcreve os vídeos em sequência, um por vez.
 - Salva a legenda `.srt` na mesma pasta do vídeo, no idioma original.
-- Pergunta ao final se deseja apagar do cache o modelo Whisper utilizado.
+- Depois de processar os arquivos selecionados, permite selecionar mais vídeos.
+- Ao encerrar a seleção de vídeos, pergunta se deseja apagar do cache todos os modelos Whisper utilizados na sessão.
 
 **A tradução automática está temporariamente desativada.** O código da tradução foi mantido para uso futuro, mas o aplicativo atualmente gera somente a legenda no idioma original.
 
@@ -21,17 +23,40 @@ GeradorLegenda/
 ├── README.md
 ├── src/
 │   ├── __init__.py
-│   ├── app.py               # Fluxo principal e interface de seleção
-│   ├── ffmpeg_setup.py      # Preparação automática do FFmpeg
-│   ├── language_picker.py   # Seleção do idioma do áudio
-│   ├── model_picker.py     # Seleção do modelo Whisper
-│   ├── progress_bar.py     # Barra de progresso
-│   ├── text_utils.py       # Formatação e correção do texto
-│   └── transcription.py    # Transcrição e geração do arquivo SRT
+│   ├── app.py                  # Orquestra o fluxo da aplicação
+│   ├── media/
+│   │   └── ffmpeg_setup.py     # Preparação automática do FFmpeg
+│   ├── subtitles/
+│   │   ├── __init__.py         # Formatação e gravação de arquivos SRT
+│   │   ├── srt.py              # Formatação e persistência das legendas
+│   │   └── text_utils.py       # Correção e formatação de texto/tempo
+│   ├── transcription/
+│   │   ├── __init__.py         # Exporta a API de transcrição
+│   │   ├── model_cache.py      # Gerencia o cache dos modelos Whisper
+│   │   ├── progress.py         # Barra, animação e saída das frases
+│   │   └── service.py          # Coordena a transcrição
+│   ├── translation/
+│   │   ├── __init__.py         # Exporta a API de tradução
+│   │   ├── progress.py         # Progresso da tradução
+│   │   └── translator.py       # Tradução em lotes, desativada no momento
+│   ├── ui/
+│   │   ├── language_picker.py  # Seleção do idioma do áudio
+│   │   ├── model_picker.py     # Seleção do modelo Whisper
+│   │   ├── window_position.py  # Centralização das janelas do aplicativo
+│   │   └── video_order_picker.py # Revisão e ordenação dos vídeos
+│   └── workflow/
+│       └── video_batch.py      # Seleção, configuração e processamento em lote
 └── tests/
-    ├── test_translator.py
-    ├── test_utils.py
-    └── test_whisper.py
+    ├── app/
+    │   └── test_app.py
+    ├── subtitles/
+    │   └── test_utils.py
+    ├── transcription/
+    │   └── test_whisper.py
+    ├── translation/
+    │   └── test_translator.py
+    └── workflow/
+        └── test_video_batch.py
 ```
 
 ## Requisitos
@@ -89,13 +114,14 @@ python run.py
 
 O arquivo `main.py` também pode iniciar o aplicativo, mas `run.py` é o ponto de entrada recomendado.
 
-1. Selecione o arquivo de vídeo.
-2. Escolha o idioma falado no vídeo.
-3. Selecione o modelo Whisper.
-4. Aguarde a transcrição. Na primeira utilização, o modelo escolhido será baixado e isso pode levar algum tempo.
-5. Ao terminar, confirme se deseja apagar o modelo Whisper do cache.
+1. Selecione um ou mais vídeos na janela de arquivos. Use `Ctrl` ou `Shift` para selecionar vários.
+2. Na tela de revisão, organize a ordem de processamento usando os botões para mover vídeos para cima ou para baixo.
+3. O terminal indica o vídeo atual e o total selecionado (por exemplo, `Vídeo 1 de 5`). Para cada vídeo, escolha o idioma falado e o modelo Whisper.
+4. Aguarde cada transcrição terminar. A legenda de cada vídeo é salva antes de o próximo começar. Na primeira utilização, o modelo escolhido será baixado e isso pode levar algum tempo.
+5. Depois que todos os vídeos selecionados forem processados, escolha se deseja selecionar mais vídeos.
+6. Quando não quiser adicionar mais vídeos, confirme se deseja apagar do cache os modelos Whisper utilizados nesta sessão.
 
-O arquivo `.srt` é salvo na mesma pasta do vídeo, com o idioma no nome, por exemplo `video.en.srt`. Se o modelo for apagado do cache, será baixado novamente na próxima utilização.
+Cada arquivo `.srt` é salvo na mesma pasta do respectivo vídeo, com o idioma no nome, por exemplo `video.en.srt`. Se os modelos forem apagados do cache, serão baixados novamente na próxima utilização.
 
 ## Modelos Whisper
 
@@ -107,13 +133,15 @@ O arquivo `.srt` é salvo na mesma pasta do vídeo, com o idioma no nome, por ex
 
 Modelos maiores podem demorar bastante, especialmente em CPU. O FP16 é ativado automaticamente quando o modelo está usando uma GPU CUDA e desativado em CPU.
 
+Durante a transcrição, a barra mostra a porcentagem, os frames processados e o tempo transcorrido (`HH:MM:SS`). Em terminais compatíveis, a barra fica fixa no topo; no console do PyCharm, ela é atualizada na mesma linha enquanto as frases reconhecidas aparecem em linhas separadas. O relógio continua avançando durante o processamento, mesmo quando o Whisper ainda não atualiza os frames.
+
 ## FFmpeg
 
 O aplicativo prepara uma cópia local do executável FFmpeg a partir da biblioteca `imageio-ffmpeg` na primeira execução. Não é necessário baixar nem instalar o FFmpeg manualmente. O arquivo local `ffmpeg.exe` é gerado na pasta do projeto e pode ser grande.
 
 ## Tradução
 
-A geração da segunda legenda traduzida está temporariamente desativada porque o serviço de tradução utilizado não está funcionando de forma confiável. Por enquanto, somente a legenda no idioma original é criada. A lógica de tradução permanece no código para ser reativada quando uma alternativa adequada estiver definida.
+A geração da segunda legenda traduzida está temporariamente desativada porque o serviço de tradução utilizado não está funcionando de forma confiável. Por enquanto, somente a legenda no idioma original é criada. A lógica de tradução permanece organizada no pacote `src/translation/` para ser reativada quando uma alternativa adequada estiver definida.
 
 ## Testes
 

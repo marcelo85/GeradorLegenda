@@ -5,7 +5,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from src import translation
 from src.transcription import gerar_e_formatar_legenda
+from src.transcription.model_cache import remover_modelo_do_cache
+from src.transcription.progress import (
+    WhisperProgressDisplay,
+    transcrever_com_progresso,
+)
 
 
 @pytest.mark.parametrize(
@@ -22,8 +28,11 @@ def test_whisper_model_loading_and_transcription(device, fp16, tmp_path):
         ]
     }
     with (
-        patch("src.transcription.whisper.load_model", return_value=modelo) as load_model,
-        patch("src.transcription.GoogleTranslator") as google_translator,
+        patch(
+            "src.transcription.service.whisper.load_model",
+            return_value=modelo,
+        ) as load_model,
+        patch("src.translation.GoogleTranslator") as google_translator,
     ):
         caminho_original = tmp_path / "legenda.en.srt"
         caminho_traduzido = tmp_path / "legenda.pt.srt"
@@ -57,15 +66,22 @@ def test_translation_is_available_when_enabled(monkeypatch, tmp_path):
         "segments": [{"start": 0, "end": 1, "text": "Hello."}]
     }
     tradutor = Mock()
-    tradutor.translate.return_value = "Olá."
-    monkeypatch.setattr("src.transcription.TRADUCAO_ATIVA", True)
+    monkeypatch.setattr(translation, "TRADUCAO_ATIVA", True)
+
+    caminho_original = tmp_path / "legenda.en.srt"
+    caminho_traduzido = tmp_path / "legenda.pt.srt"
+
+    def traduzir_apos_salvar(texto):
+        assert caminho_original.exists()
+        assert "Hello." in caminho_original.read_text(encoding="utf-8")
+        return "Olá."
+
+    tradutor.translate.side_effect = traduzir_apos_salvar
 
     with (
-        patch("src.transcription.whisper.load_model", return_value=modelo),
-        patch("src.transcription.GoogleTranslator", return_value=tradutor),
+        patch("src.transcription.service.whisper.load_model", return_value=modelo),
+        patch("src.translation.GoogleTranslator", return_value=tradutor),
     ):
-        caminho_original = tmp_path / "legenda.en.srt"
-        caminho_traduzido = tmp_path / "legenda.pt.srt"
         gerar_e_formatar_legenda(
             "video.mp4",
             caminho_original,
@@ -83,7 +99,7 @@ def test_transcription_failure_is_propagated(tmp_path):
     modelo.transcribe.side_effect = RuntimeError("falha de transcrição")
 
     with (
-        patch("src.transcription.whisper.load_model", return_value=modelo),
+        patch("src.transcription.service.whisper.load_model", return_value=modelo),
         pytest.raises(RuntimeError, match="falha de transcrição"),
     ):
         gerar_e_formatar_legenda(
@@ -106,8 +122,6 @@ def test_cache_cleanup_removes_selected_checkpoint(tmp_path, monkeypatch):
     cache_modelo.parent.mkdir()
     cache_modelo.write_bytes(b"modelo")
 
-    from src.transcription import remover_modelo_do_cache
-
     remover_modelo_do_cache("base")
 
     assert not cache_modelo.exists()
@@ -123,14 +137,10 @@ def test_cache_cleanup_does_not_fail_if_checkpoint_is_not_present(tmp_path, monk
         "https://example.test/checksum/base.pt",
     )
 
-    from src.transcription import remover_modelo_do_cache
-
     remover_modelo_do_cache("base")
 
 
 def test_cache_cleanup_rejects_unknown_model():
-    from src.transcription import remover_modelo_do_cache
-
     with pytest.raises(ValueError, match="Não é possível localizar"):
         remover_modelo_do_cache("unknown-model")
 
@@ -148,10 +158,8 @@ def test_transcription_shows_frame_bar_and_segments_together():
     model.transcribe.side_effect = transcribe
     tqdm_previo = modulo_transcricao.tqdm
     saida = StringIO()
-    with patch("src.transcription.sys.stdout", saida):
-        from src.transcription import _transcrever_com_barra_e_frases
-
-        _transcrever_com_barra_e_frases(model, "video.mp4", False, "en")
+    with patch("src.transcription.progress.sys.stdout", saida):
+        transcrever_com_progresso(model, "video.mp4", False, "en")
 
     assert modulo_transcricao.tqdm is tqdm_previo
     assert "25.0%" in saida.getvalue()
@@ -166,9 +174,7 @@ def test_transcription_restores_whisper_progress_hook_after_exception():
     model.transcribe.side_effect = RuntimeError("erro")
 
     with pytest.raises(RuntimeError, match="erro"):
-        from src.transcription import _transcrever_com_barra_e_frases
-
-        _transcrever_com_barra_e_frases(model, "video.mp4", False, "en")
+        transcrever_com_progresso(model, "video.mp4", False, "en")
 
     assert modulo_transcricao.tqdm is tqdm_previo
 
@@ -178,11 +184,9 @@ def test_transcription_restores_whisper_progress_hook_after_exception():
     [(False, "50.0%"), (True, "\x1b[1;1H")],
 )
 def test_progress_display_handles_terminal_and_plain_output(terminal, esperado):
-    from src.transcription import _WhisperProgressDisplay
-
     stream = StringIO()
     stream.isatty = lambda: terminal
-    display = _WhisperProgressDisplay()
+    display = WhisperProgressDisplay()
     display.stream = stream
     display.terminal = terminal
 
@@ -195,10 +199,8 @@ def test_progress_display_handles_terminal_and_plain_output(terminal, esperado):
 
 
 def test_progress_display_caps_progress_at_one_hundred_percent():
-    from src.transcription import _WhisperProgressDisplay
-
     stream = StringIO()
-    display = _WhisperProgressDisplay()
+    display = WhisperProgressDisplay()
     display.stream = stream
     display.terminal = False
 
@@ -208,11 +210,64 @@ def test_progress_display_caps_progress_at_one_hundred_percent():
     assert "100.0%" in stream.getvalue()
 
 
-def test_progress_display_handles_zero_total():
-    from src.transcription import _WhisperProgressDisplay
+@pytest.mark.parametrize(
+    ("elapsed_seconds", "expected"),
+    [(65, "Decorrido: 00:01:05"), (3661, "Decorrido: 01:01:01")],
+)
+def test_progress_display_shows_elapsed_time(elapsed_seconds, expected):
+    from src.transcription.progress import WhisperProgressDisplay
 
     stream = StringIO()
-    display = _WhisperProgressDisplay()
+    display = WhisperProgressDisplay()
+    display.stream = stream
+    display.terminal = False
+
+    with patch(
+        "src.transcription.progress.time.monotonic",
+        side_effect=[100, 100 + elapsed_seconds],
+    ):
+        display.start(100)
+
+    assert expected in stream.getvalue()
+
+
+def test_progress_display_uses_fixed_bar_in_pycharm_console(monkeypatch):
+    monkeypatch.setenv("PYCHARM_HOSTED", "1")
+    stream = StringIO()
+    display = WhisperProgressDisplay()
+    display.stream = stream
+
+    display.start(100)
+    display.update(25)
+    display.write("frase reconhecida\n")
+    display.finish()
+
+    output = stream.getvalue()
+    assert display.ide_console
+    assert not display.terminal
+    assert "\rTranscrição" in output
+    assert "\033[" not in output
+    assert "frase reconhecida" in stream.getvalue()
+    assert "\nfrase reconhecida\n\rTranscrição" in output
+
+
+def test_progress_display_refreshes_elapsed_time_without_spinner():
+    stream = StringIO()
+    display = WhisperProgressDisplay()
+    display.stream = stream
+    display.terminal = True
+
+    display.start(100)
+    assert display._refresh_thread.is_alive()
+    display.finish()
+
+    assert "Decorrido: 00:00:00" in stream.getvalue()
+    assert not display._refresh_thread.is_alive()
+
+
+def test_progress_display_handles_zero_total():
+    stream = StringIO()
+    display = WhisperProgressDisplay()
     display.stream = stream
     display.terminal = False
 
