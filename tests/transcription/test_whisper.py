@@ -23,8 +23,24 @@ def test_whisper_model_loading_and_transcription(device, fp16, tmp_path):
     modelo.device = SimpleNamespace(type=device)
     modelo.transcribe.return_value = {
         "segments": [
-            {"start": 0.25, "end": 1.5, "text": " Hello.World "},
-            {"start": 2.0, "end": 2.5, "text": "Thank you."},
+            {
+                "start": 0.25,
+                "end": 1.5,
+                "text": " Hello. World. ",
+                "words": [
+                    {"word": " Hello.", "start": 0.25, "end": 0.9},
+                    {"word": " World.", "start": 1.0, "end": 1.5},
+                ],
+            },
+            {
+                "start": 2.0,
+                "end": 2.5,
+                "text": "Thank you.",
+                "words": [
+                    {"word": " Thank", "start": 2.0, "end": 2.2},
+                    {"word": " you.", "start": 2.2, "end": 2.5},
+                ],
+            },
         ]
     }
     with (
@@ -51,10 +67,12 @@ def test_whisper_model_loading_and_transcription(device, fp16, tmp_path):
         fp16=fp16,
         verbose=True,
         language="en",
+        word_timestamps=True,
     )
     assert caminho_original.read_text(encoding="utf-8") == (
-        "1\n00:00:00,250 --> 00:00:01,500\nHello. World\n\n"
-        "2\n00:00:02,000 --> 00:00:02,500\nThank you.\n"
+        "1\n00:00:00,250 --> 00:00:00,900\nHello.\n\n"
+        "2\n00:00:01,000 --> 00:00:01,500\nWorld.\n\n"
+        "3\n00:00:02,000 --> 00:00:02,500\nThank you.\n"
     )
     assert not caminho_traduzido.exists()
 
@@ -63,7 +81,14 @@ def test_translation_is_available_when_enabled(monkeypatch, tmp_path):
     modelo = Mock()
     modelo.device = SimpleNamespace(type="cpu")
     modelo.transcribe.return_value = {
-        "segments": [{"start": 0, "end": 1, "text": "Hello."}]
+        "segments": [
+            {
+                "start": 0,
+                "end": 1,
+                "text": "Hello.",
+                "words": [{"word": " Hello.", "start": 0, "end": 1}],
+            }
+        ]
     }
     tradutor = Mock()
     monkeypatch.setattr(translation, "TRADUCAO_ATIVA", True)

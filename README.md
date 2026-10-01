@@ -9,6 +9,8 @@ Aplicativo para transcrever o áudio de vídeos com o Whisper e gerar um arquivo
 - Para cada vídeo, permite escolher individualmente o idioma e o modelo Whisper.
 - Transcreve os vídeos em sequência, um por vez.
 - Salva a legenda `.srt` na mesma pasta do vídeo, no idioma original.
+- Usa timestamps por palavra para agrupar as falas em blocos de até duas linhas,
+  com aproximadamente 40 caracteres por linha.
 - Depois de processar os arquivos selecionados, permite selecionar mais vídeos.
 - Ao encerrar a seleção de vídeos, pergunta se deseja apagar do cache todos os modelos Whisper utilizados na sessão.
 
@@ -133,7 +135,7 @@ Cada arquivo `.srt` é salvo na mesma pasta do respectivo vídeo, com o idioma n
 
 Modelos maiores podem demorar bastante, especialmente em CPU. O FP16 é ativado automaticamente quando o modelo está usando uma GPU CUDA e desativado em CPU.
 
-Durante a transcrição, a barra mostra a porcentagem, os frames processados e o tempo transcorrido (`HH:MM:SS`). Em terminais compatíveis, a barra fica fixa no topo; no console do PyCharm, ela é atualizada na mesma linha enquanto as frases reconhecidas aparecem em linhas separadas. O relógio continua avançando durante o processamento, mesmo quando o Whisper ainda não atualiza os frames.
+Durante a transcrição, a barra mostra a porcentagem, os frames processados e o tempo transcorrido (`HH:MM:SS`). Em terminais compatíveis, a barra fica fixa no topo; no console do PyCharm, ela é atualizada na mesma linha enquanto as frases reconhecidas aparecem em linhas separadas. O relógio continua avançando durante o processamento, mesmo quando o Whisper ainda não atualiza os frames. O alinhamento por palavra pode aumentar o tempo de processamento; os limites são estimativas do Whisper e ainda podem exigir revisão contra o áudio.
 
 ## FFmpeg
 

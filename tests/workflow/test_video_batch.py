@@ -67,16 +67,33 @@ def test_processar_lotes_skips_cache_prompt_without_processed_videos(monkeypatch
     ask_yes_no.assert_not_called()
 
 
-def test_processar_lotes_stops_when_order_dialog_is_cancelled(monkeypatch):
+def test_single_video_selection_skips_order_dialog(monkeypatch):
     monkeypatch.setattr(
         video_batch.filedialog,
         "askopenfilenames",
         lambda **kwargs: ("video.mp4",),
     )
-    monkeypatch.setattr(video_batch, "ordenar_videos", lambda videos, root: None)
-    ask_yes_no = Mock()
-    monkeypatch.setattr(video_batch.messagebox, "askyesno", ask_yes_no)
+    order_videos = Mock()
+    monkeypatch.setattr(video_batch, "ordenar_videos", order_videos)
 
-    video_batch.processar_lotes_videos(Mock())
+    videos = video_batch._selecionar_videos(Mock())
 
-    ask_yes_no.assert_not_called()
+    assert videos == ("video.mp4",)
+    order_videos.assert_not_called()
+
+
+def test_multiple_video_selection_shows_order_dialog(monkeypatch):
+    selected_videos = ("first.mp4", "second.mp4")
+    monkeypatch.setattr(
+        video_batch.filedialog,
+        "askopenfilenames",
+        lambda **kwargs: selected_videos,
+    )
+    order_videos = Mock(return_value=selected_videos)
+    monkeypatch.setattr(video_batch, "ordenar_videos", order_videos)
+    root = Mock()
+
+    videos = video_batch._selecionar_videos(root)
+
+    assert videos == selected_videos
+    order_videos.assert_called_once_with(selected_videos, root)

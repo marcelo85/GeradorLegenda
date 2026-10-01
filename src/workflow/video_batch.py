@@ -55,6 +55,8 @@ def _selecionar_videos(root):
     )
     if not videos:
         return ()
+    if len(videos) == 1:
+        return videos
     return ordenar_videos(videos, root)
 
 

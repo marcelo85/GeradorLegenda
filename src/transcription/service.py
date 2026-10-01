@@ -30,6 +30,7 @@ def gerar_e_formatar_legenda(
         caminho_video,
         usar_fp16,
         idioma_escolhido,
+        word_timestamps=True,
     )
 
     print("\nGerando arquivo de legenda... (Aguarde)")

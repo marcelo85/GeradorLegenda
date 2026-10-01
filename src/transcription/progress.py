@@ -112,7 +112,13 @@ class WhisperProgressDisplay:
             self.stream.flush()
 
 
-def transcrever_com_progresso(model, caminho_video, fp16, idioma):
+def transcrever_com_progresso(
+    model,
+    caminho_video,
+    fp16,
+    idioma,
+    word_timestamps=False,
+):
     modulo_transcricao = importlib.import_module("whisper.transcribe")
     display = WhisperProgressDisplay()
 
@@ -138,6 +144,7 @@ def transcrever_com_progresso(model, caminho_video, fp16, idioma):
                 fp16=fp16,
                 verbose=True,
                 language=idioma,
+                word_timestamps=word_timestamps,
             )
     finally:
         modulo_transcricao.tqdm = tqdm_original
